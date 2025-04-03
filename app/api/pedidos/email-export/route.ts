@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const emailRemetente = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-
+// Configurar o transporte de email com Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD, // Senha de aplicativo do Gmail
+  },
+});
 
 function gerarNumeroAleatorio(digitos: number): string {
   return Math.floor(Math.random() * Math.pow(10, digitos)).toString().padStart(digitos, '0');
@@ -19,11 +24,9 @@ function gerarEAN(): string {
   return gerarNumeroAleatorio(14);
 }
 
-
 function gerarRemessa(): string {
   return gerarNumeroAleatorio(8);
 }
-
 
 function gerarOrdem(): number {
   return Math.floor(Math.random() * 100) + 1;
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-
+    // Buscar pedido no Supabase
     const { data: pedido, error: pedidoError } = await supabase
       .from('integracao_pedidos')
       .select(`
@@ -95,11 +98,11 @@ export async function POST(request: NextRequest) {
       'EAN': gerarEAN()
     }));
     
-
+    // Criar workbook e adicionar planilha
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(planilhaDados);
     
-
+    // Definir larguras de coluna para melhor visualização
     const wscols = [
       { wch: 15 }, // Loja
       { wch: 15 }, // Remessa
@@ -119,10 +122,13 @@ export async function POST(request: NextRequest) {
     
     XLSX.utils.book_append_sheet(wb, ws, "Requisição");
     
+    // Converter para buffer
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     
+    // Nome do arquivo
     const nomeArquivo = `Requisicao_${pedido.codigo.replace(/\//g, '-')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
     
+    // Preparar o email
     const dataFormatada = new Date(pedido.data).toLocaleDateString('pt-BR');
     const destinatariosArray = Array.isArray(emailDestinatarios) 
       ? emailDestinatarios 
@@ -164,21 +170,37 @@ export async function POST(request: NextRequest) {
       </div>
     `;
 
-    const attachmentContent = buffer.toString('base64');
-    
-    const data = await resend.emails.send({
-      from: `Sistema de Pedidos <${emailRemetente}>`,
-      to: destinatariosArray,
+    // Enviar email
+    const info = await transporter.sendMail({
+      from: `"Sistema de Pedidos" <${process.env.GMAIL_USER}>`,
+      to: destinatariosArray.join(', '),
       subject: `Novo Pedido Gerado - ${pedido.codigo} - ${dataFormatada}`,
+      text: `
+        Olá,
+
+        Um novo pedido foi gerado no sistema.
+
+        Número do Pedido: ${pedido.codigo}
+        Data: ${dataFormatada}
+        Solicitante: ${pedido.solicitante}
+        Total de Itens: ${pedido.integracao_pedidos_itens.length}
+        
+        Observações: ${pedido.observacoes || 'Nenhuma observação'}
+
+        A planilha de requisição está anexada a este email.
+
+        Este é um email automático, por favor não responda.
+      `,
       html: htmlContent,
       attachments: [
         {
           filename: nomeArquivo,
-          content: attachmentContent
+          content: buffer
         }
       ]
     });
     
+    // Atualizar o status do pedido para indicar que foi enviado por email
     await supabase
       .from('integracao_pedidos')
       .update({ 
@@ -190,7 +212,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: "Pedido enviado por email com sucesso",
-      emailId: data.data?.id,
+      emailId: info.messageId,
       filename: nomeArquivo
     });
     
