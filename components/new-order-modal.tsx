@@ -127,14 +127,35 @@ export function NewOrderModal({ open, onOpenChange, onSuccess }: NewOrderModalPr
   }
 
   const adicionarItem = () => {
-    const quantidade = form.getValues("quantidade")
-    if (!produtoSelecionado || !quantidade) {
+    const codigo = form.getValues("codigoProduto");
+    const quantidade = form.getValues("quantidade");
+    
+    // Validação amigável com mensagens específicas
+    if (!codigo) {
       toast({
-        title: "Dados incompletos",
-        description: "Selecione um produto e informe a quantidade",
+        title: "Código do produto não informado",
+        description: "Digite o código do produto e pressione Enter para buscar",
         variant: "destructive",
-      })
-      return
+      });
+      return;
+    }
+    
+    if (!produtoSelecionado) {
+      toast({
+        title: "Produto não encontrado",
+        description: "Busque um produto válido antes de adicionar ao pedido",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!quantidade) {
+      toast({
+        title: "Quantidade não informada",
+        description: "Informe a quantidade desejada para este item",
+        variant: "destructive",
+      });
+      return;
     }
 
     const novoItem: ItemPedido = {
@@ -151,6 +172,9 @@ export function NewOrderModal({ open, onOpenChange, onSuccess }: NewOrderModalPr
     form.setValue("codigoProduto", "")
     form.setValue("quantidade", undefined)
     setProdutoSelecionado(null)
+    
+    form.clearErrors("codigoProduto")
+    form.clearErrors("quantidade")
     
     // Foca no campo de código novamente
     setTimeout(() => {
@@ -497,7 +521,6 @@ export function NewOrderModal({ open, onOpenChange, onSuccess }: NewOrderModalPr
                 <Button
                   type="button"
                   onClick={adicionarItem}
-                  disabled={!produtoSelecionado || !form.getValues("quantidade") || isSearching}
                   className="w-full"
                 >
                   <Plus className="h-4 w-4 mr-2" />
