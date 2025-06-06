@@ -70,8 +70,16 @@ export default function Relatorios() {
       
       const result = await getPedidos(filters);
       
-      setPedidos(result);
-      setFilteredPedidos(result);
+      // Explicitly sort by date descending (newest first)
+      // Ensure 'data' is a string that can be parsed by Date
+      const sortedResult = result.sort((a, b) => {
+        const dateA = new Date(a.data).getTime();
+        const dateB = new Date(b.data).getTime();
+        return dateB - dateA; // For descending order
+      });
+      
+      setPedidos(sortedResult);
+      setFilteredPedidos(sortedResult);
     } catch (err) {
       console.error("Erro ao buscar pedidos:", err);
       toast({
