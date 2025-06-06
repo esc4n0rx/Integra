@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       .from('integracao_pedidos')
       .insert({
         codigo: pedido.codigo || null,
-        data: pedido.data ? new Date(pedido.data) : new Date(),
+        data: new Date(),
         solicitante: pedido.solicitante,
         observacoes: pedido.observacoes || null
       })
