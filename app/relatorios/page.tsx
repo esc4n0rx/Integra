@@ -27,6 +27,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { format, isValid, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone';
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { usePedidos } from "@/hooks/use-pedidos"
@@ -234,11 +235,18 @@ export default function Relatorios() {
   // Função auxiliar para formatar a data
   const formatDate = (dateString: string) => {
     try {
-      const date = parseISO(dateString)
-      if (!isValid(date)) return dateString // Retorna string original se não for uma data válida
-      return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })
+      // Assegura que a string de data seja parseada como UTC antes de converter
+      // Se a string já tiver informações de timezone (e.g., 'Z' ou offset), parseISO vai respeitar.
+      // Se for apenas 'YYYY-MM-DDTHH:mm:ss', será parseada como local, então é importante
+      // que o servidor envie datas em ISO 8601 com indicador de UTC ('Z') ou com offset.
+      // Para garantir consistência, podemos tratar a data como UTC se não houver timezone.
+      const date = parseISO(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+      if (!isValid(date)) return dateString; // Retorna string original se não for uma data válida
+
+      return formatInTimeZone(date, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm', { locale: ptBR });
     } catch (error) {
-      return dateString // Em caso de erro, retorna a string original
+      console.error("Erro ao formatar data:", error);
+      return dateString; // Em caso de erro, retorna a string original
     }
   }
 
